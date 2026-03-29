@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Wira Bersih: Cabaran 7 Langkah! 🧼</title>
+    
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Quicksand:wght@500;700&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --bg-color: #e0f7fa;
+            --primary: #00bcd4;
+            --secondary: #ff4081;
+            --success: #4caf50;
+        }
+
+        body, html {
+            margin: 0; padding: 0;
+            width: 100%; height: 100%;
+            font-family: 'Quicksand', sans-serif;
+            background-color: var(--bg-color);
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* Permission & Overlay Screens */
+        .overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(255, 255, 255, 0.95);
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .btn {
+            padding: 20px 40px;
+            font-size: 24px;
+            font-family: 'Fredoka One', cursive;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            box-shadow: 0 8px 0 #008ba3;
+            transition: transform 0.1s;
+        }
+
+        .btn:active { transform: translateY(4px); box-shadow: 0 4px 0 #008ba3; }
+
+        /* Game UI */
+        #game-ui {
+            display: none;
+            width: 100%;
+            height: 100%;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .camera-container {
+            position: relative;
+            width: 90vw;
+            max-width: 640px;
+            height: 480px;
+            border: 10px solid white;
+            border-radius: 30px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            background: #000;
+            overflow: hidden;
+            margin-top: 20px;
+        }
+
+        #webcam, #output-canvas {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            transform: scaleX(-1); /* Mirror effect */
+            object-fit: cover;
+        }
+
+        .instructions-card {
+            background: white;
+            width: 90%;
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 20px;
+            text-align: center;
+            box-shadow: 0 10px 0 #ddd;
+        }
+
+        #step-text { font-size: 22px; font-weight: bold; color: #333; min-height: 60px; }
+
+        /* Progress Bar */
+        .progress-container {
+            width: 80%;
+            height: 20px;
+            background: #eee;
+            border-radius: 10px;
+            margin: 15px 0;
+            overflow: hidden;
+        }
+        #progress-fill {
+            width: 0%;
+            height: 100%;
+            background: var(--success);
+            transition: width 0.5s ease;
+        }
+
+        .chibi-guide {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            width: 120px;
+            z-index: 10;
+        }
+
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+
+    <div id="permission-screen" class="overlay">
+        <h1 style="font-family: 'Fredoka One'; color: var(--primary);">Jom Jadi Wira Bersih! 🧼</h1>
+        <img src="https://api.dicebear.com/7.x/bottts-neutral/svg?seed=Felix&backgroundColor=b6e3f4" width="150" alt="Bot">
+        <p style="font-size: 1.2rem;">Kami perlu menggunakan kamera untuk melihat <br>cara anda membasuh tangan. Sila benarkan akses! 😊</p>
+        <button class="btn" onclick="requestCamera()">Buka Kamera 🎥</button>
+    </div>
+
+    <div id="error-screen" class="overlay hidden">
+        <h1 style="color: var(--secondary);">Alamak! 🛑</h1>
+        <p>Kamera tidak dapat dibuka. Sila benarkan akses di tetapan pelayar anda.</p>
+        <button class="btn" onclick="location.reload()">Cuba Lagi 🔄</button>
+    </div>
+
+    <div id="game-ui">
+        <div class="progress-container">
+            <div id="progress-fill"></div>
+        </div>
+
+        <div class="camera-container">
+            <video id="webcam" autoplay playsinline></video>
+            <canvas id="output-canvas"></canvas>
+            <div id="timer" style="position:absolute; top:10px; left:10px; background:rgba(0,0,0,0.5); color:white; padding:10px; border-radius:10px; font-weight:bold;">Tunggu: 5s</div>
+        </div>
+
+        <div class="instructions-card">
+            <div id="step-label" style="color: var(--secondary); font-weight: bold;">LANGKAH 1</div>
+            <div id="step-text">Memulakan...</div>
+        </div>
+
+        <img class="chibi-guide" id="chibi" src="https://api.dicebear.com/7.x/bottts-neutral/svg?seed=Felix" alt="Guide">
+    </div>
+
+<script>
+    const steps = [
+        { text: "Basahkan tangan, letak sabun dan ratakan", duration: 3 },
+        { text: "Gosok tapak tangan", duration: 5 },
+        { text: "Gosok setiap jari dan celah jari", duration: 5 },
+        { text: "Gosok belakang tangan", duration: 5 },
+        { text: "Gosok kuku di tapak tangan", duration: 5 },
+        { text: "Bilas dengan air bersih secukupnya", duration: 5 },
+        { text: "Keringkan tangan dengan kain bersih", duration: 4 }
+    ];
+
+    let currentStep = 0;
+    let stepTimer = 0;
+    let isTracking = false;
+    let handInFrame = false;
+
+    const videoElement = document.getElementById('webcam');
+    const canvasElement = document.getElementById('output-canvas');
+    const ctx = canvasElement.getContext('2d');
+
+    // 1. Camera Request & Permission
+    async function requestCamera() {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+                video: { facingMode: "user" }, 
+                audio: false 
+            });
+            videoElement.srcObject = stream;
+            document.getElementById('permission-screen').classList.add('hidden');
+            document.getElementById('game-ui').style.display = 'flex';
+            initAI();
+        } catch (err) {
+            console.error(err);
+            document.getElementById('permission-screen').classList.add('hidden');
+            document.getElementById('error-screen').classList.remove('hidden');
+        }
+    }
+
+    // 2. Initialize MediaPipe Hand Tracking
+    function initAI() {
+        const hands = new Hands({
+            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+        });
+
+        hands.setOptions({
+            maxNumHands: 2,
+            modelComplexity: 1,
+            minDetectionConfidence: 0.5,
+            minTrackingConfidence: 0.5
+        });
+
+        hands.onResults(onResults);
+
+        const camera = new Camera(videoElement, {
+            onFrame: async () => {
+                await hands.send({image: videoElement});
+            },
+            width: 640,
+            height: 480
+        });
+        camera.start();
+        startStep();
+    }
+
+    // 3. Game Logic
+    function onResults(results) {
+        handInFrame = (results.multiHandLandmarks && results.multiHandLandmarks.length > 0);
+        
+        ctx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+        if (handInFrame) {
+            document.getElementById('chibi').style.transform = "scale(1.1) rotate(5deg)";
+        } else {
+            document.getElementById('chibi').style.transform = "scale(1.0)";
+        }
+    }
+
+    function startStep() {
+        if (currentStep >= steps.length) {
+            celebrate();
+            return;
+        }
+
+        const step = steps[currentStep];
+        document.getElementById('step-label').innerText = `LANGKAH ${currentStep + 1}`;
+        document.getElementById('step-text').innerText = step.text;
+        document.getElementById('progress-fill').style.width = `${((currentStep + 1) / steps.length) * 100}%`;
+        
+        speak(step.text);
+        
+        stepTimer = step.duration;
+        let countdown = setInterval(() => {
+            if (handInFrame) {
+                stepTimer--;
+                document.getElementById('timer').innerText = `Hebat! Teruskan: ${stepTimer}s`;
+                document.getElementById('timer').style.background = "rgba(76, 175, 80, 0.8)";
+            } else {
+                document.getElementById('timer').innerText = `Tunjukkan tangan anda!`;
+                document.getElementById('timer').style.background = "rgba(255, 64, 129, 0.8)";
+            }
+
+            if (stepTimer <= 0) {
+                clearInterval(countdown);
+                currentStep++;
+                playSuccessSound();
+                startStep();
+            }
+        }, 1000);
+    }
+
+    function speak(text) {
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = 'ms-MY';
+        window.speechSynthesis.speak(utterance);
+    }
+
+    function playSuccessSound() {
+        // Simple Audio feedback
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.frequency.setValueAtTime(523.25, ctx.currentTime); // C5
+        osc.start();
+        gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.5);
+        osc.stop(ctx.currentTime + 0.5);
+    }
+
+    function celebrate() {
+        document.getElementById('game-ui').innerHTML = `
+            <div class="overlay">
+                <h1 style="font-size: 3rem;">🎉 TAHNIAH! 🎉</h1>
+                <p style="font-size: 1.5rem;">Tangan anda kini bersih dan selamat!</p>
+                <img src="https://api.dicebear.com/7.x/bottts-neutral/svg?seed=Felix&happy=true" width="200">
+                <br>
+                <button class="btn" onclick="location.reload()">Main Semula 🔄</button>
+            </div>
+        `;
+        speak("Tahniah! Anda adalah wira bersih!");
+    }
+</script>
+</body>
+</html>
